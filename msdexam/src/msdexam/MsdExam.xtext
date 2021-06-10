@@ -3,7 +3,7 @@ grammar msdexam.MsdExam with org.eclipse.xtext.common.Terminals
 generate msdExam "http://www.MsdExam.msdexam"
 
 X21:
-	{X21} 'program' ID declarations+=Declaration*
+	{X21} 'program' name=ID declarations+=Declaration*
 ;
 
 Declaration:
@@ -19,7 +19,7 @@ InputNNode:
 ;
 
 Type:
-	 {Type} 'int' |  {Type} 'string' | name=ID
+	 {Type} type='int' |  {Type} type='string' | name=ID
 ;
 
 DataDecl:
@@ -89,7 +89,7 @@ Variable returns Expression:
 ;
 
 Exp returns Expression:
-	{Expression} Plus | {Expression} Minus | {Expression} Mult | {Expression} Div | Num | Parenthesis | VariableCreation | Variable | {Expression} None | New | Logical | ObjectVariable
+	 Plus |  Minus |  Mult |  Div | Num | Parenthesis | VariableCreation | Variable | {Expression} None | New | Logical | ObjectVariable
 ;
 VariableCreation returns Expression:
 	{Let} 'let' id=ID '=' exps+=Exp* 'in' body+=Exp* 'end'
@@ -108,19 +108,19 @@ ObjectVariable returns Expression:
 ;
 
 Plus:
-	'+'
+	{Plus}'+'
 ;
 
 Minus:
-	'-'
+	{Minus}'-'
 ;
 
 Mult:
-	'*'
+	{Mult}'*'
 ;
 
 Div:
-	'/'
+	{Div}'/'
 ;
 
 Logical returns Expression:

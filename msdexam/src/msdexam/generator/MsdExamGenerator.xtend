@@ -7,6 +7,19 @@ import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.AbstractGenerator
 import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
+import msdexam.msdExam.X21
+import msdexam.msdExam.Function
+import msdexam.msdExam.Expression
+import msdexam.msdExam.Plus
+import msdexam.msdExam.Var
+import msdexam.msdExam.Num
+import msdexam.msdExam.Input
+import msdexam.msdExam.Node
+import msdexam.msdExam.Stream
+import msdexam.msdExam.InputNNode
+import msdexam.msdExam.Minus
+import msdexam.msdExam.Mult
+import msdexam.msdExam.Div
 
 /**
  * Generates code from your model files on save.
@@ -16,10 +29,130 @@ import org.eclipse.xtext.generator.IGeneratorContext
 class MsdExamGenerator extends AbstractGenerator {
 
 	override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
+		val program = resource.allContents.filter(X21).next
+		fsa.generateFile(program.name.toFirstLower + "/" + program.name.toFirstUpper +"Main.java",generateFileContents(program))
+		
 //		fsa.generateFile('greetings.txt', 'People to greet: ' + 
 //			resource.allContents
 //				.filter(Greeting)
 //				.map[name]
 //				.join(', '))
 	}
+	
+	def CharSequence generateFileContents(X21 program) {
+		'''
+		package «program.name»;
+		import libx21.*;
+		import java.util.function.Function;
+		import java.util.List;
+		
+		public class «program.name.toFirstUpper»Main extends GenericMainX21 {
+			«generateFunctions(program)»
+			«generateInputs(program)»
+			«generateNodes(program)»
+			«generateOutputNodes(program)»
+			«initializeNodes(program)»
+			«initializeNetwork(program)»
+			
+		}
+		'''
+	}
+	
+	def CharSequence generateFunctions(X21 program) {
+		//«resource.allContents.toIterable.filter(Function)»
+		'''
+		
+		«FOR f: program.declarations.filter(Function)»
+		private Object fun_«f.name»(Object arg) {
+			return funimpl_«f.name»((Integer)arg);
+		}
+		
+		private Object funimpl_«f.name»(Integer _«f.function.id») { return («FOR exp: f.function.exp»«exp.getExpBody»«ENDFOR»); }
+		«ENDFOR»
+		
+		
+		'''
+	}
+	
+	def CharSequence getExpBody(Expression exp){
+		switch exp {
+			Plus: "+"
+			Minus: "-"
+			Mult: "*"
+			Div: "/"
+			Var: "_"+exp.id
+			Num: exp.value.toString
+			default: throw new Error("Invalid expression")
+		}
+	}
+	
+	def CharSequence generateInputs(X21 program) {
+		'''
+		«FOR input: program.declarations.filter(Input)»
+		private ComputeNode<Object, Object> node_«input.name» = new InputNode<Object>();
+		public void input«input.name.toFirstUpper»(Integer input){
+			node_«input.name».put(input);
+		}
+		«ENDFOR»
+		'''
+	}
+	
+	def CharSequence generateNodes(X21 program) {
+		//CHECK IF LAMBDA INSTEAD OF FUNCTION
+		'''
+		«FOR n: program.declarations.filter(Node)»
+		private ComputeNode<Object, Object> node_«n.name» = new AbstractComputeNode<Object, Object>(){
+			protected Objection function(Object input) {
+				return fun_«n.function.name»(input);
+			}
+		};
+		
+		«ENDFOR»
+		'''
+	}
+	
+	def CharSequence generateOutputNodes(X21 program) {
+		//«FOR t:s.functions»«t.output»«ENDFOR»
+		//.get(1) is probably not the best solution
+		'''
+		«FOR s: program.declarations.filter(Stream)»
+		private OutputNode<Object> node_«s.functions.get(1).output» = new OutputNode<Object>();
+		public List<Object> get«s.functions.get(1).output.toFirstUpper»() {return node_«s.functions.get(1).output».getData(); }
+		
+		«ENDFOR»
+		'''
+	}
+	
+	def CharSequence initializeNodes(X21 program) {
+		'''
+		protected void initializeNodes() {
+			«FOR n:program.declarations.filter(Input)»
+			super.addNode(node_«n.name»);
+			«ENDFOR»
+			«FOR n:program.declarations.filter(Node)»
+			super.addNode(node_«n.name»);
+			«ENDFOR»
+		}
+		'''
+	}
+	//USING .GET(0)     
+	def CharSequence initializeNetwork(X21 program) {
+		'''
+		protected void initializeNetwork() {
+			«FOR s: program.declarations.filter(Stream)»
+			node_«s.inputs.get(0).name».addOutputNode(node_«s.functions.get(0).funcNode.name»);
+			node_«s.functions.get(0).funcNode.name».addOutputNode(node_«s.functions.get(1).output»);
+			
+			«ENDFOR»
+		}
+		'''
+	}
+	
+	def String name(InputNNode node){
+		switch node{
+			Input: node.name
+			Node: node.name
+		}
+	}
+	
 }
