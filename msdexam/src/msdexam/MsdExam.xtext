@@ -2,8 +2,109 @@ grammar msdexam.MsdExam with org.eclipse.xtext.common.Terminals
 
 generate msdExam "http://www.MsdExam.msdexam"
 
-Model:
-	greetings+=Greeting*;
-	
-Greeting:
-	'Hello' name=ID '!';
+X21:
+	{X21} 'program' ID declarations+=Declaration*
+;
+
+Declaration:
+	Function | Node | Input | Stream | DataDecl | Parameter
+;
+
+Parameter:
+	'parameter' name=ID ':' type=Type
+;
+
+InputNNode:
+	Node | Input
+;
+
+Type:
+	 {Type} 'int' |  {Type} 'string' | name=ID
+;
+
+DataDecl:
+	'data' name=ID '{' dataValues+=DataValue (',' dataValues+=DataValue)* '}'
+;
+
+DataValue:
+	name=ID ':' type=Type
+;
+
+//Stream:
+//	'stream' (inputs+=[Node] | inputs+=[Input]) (',' (inputs+=[Node] | inputs+=[Input]))* ('to' functions+=Element (',' functions+=Element)* )+
+//;
+
+Stream: 
+	'stream' inputs+=[InputNNode] (',' inputs+=[InputNNode])* ('to' functions+=Element (',' functions+=Element)* )+
+;
+
+
+Element://id=ID might not be correct
+	funcNode=[Node] | '[' (name=ID | function=Lambda) ']' | 'output' output=ID
+;
+
+Lambda:
+	'(' id=ID ':' type=Type ')' '{' exp=Exp '}'
+;
+
+Node:
+	'node' name=ID '[' (function=[Function] | lambda=Lambda) ']'
+;
+
+Input:
+	'input' name=ID ':' type=Type
+;
+
+Function:
+	'function' name=ID function=Lambda
+;
+
+Exp returns Expression:
+//	Exp '+' Exp | Exp '-' Exp | Exp '*' Exp | Exp '/' Exp
+//	| INT | '(' Exp ')' | 'let' ID '=' Exp 'in' Exp 'end'
+//	| ID ( '.' ID )* | 'none' | 'if' LogicExp 'then' Exp 'else' Exp 'end'
+//	| 'new' ID '[' ID '=' Exp (',' ID '=' Exp)* ']'
+	Factor (('+' {Plus.left=current} | '-' {Minus.left=current}) right=Factor)*
+;
+
+Factor returns Expression:
+	Primary (('*' {Mult.left=current} | '/' {Div.left=current}) right=Primary)*
+;
+
+Primary returns Expression:
+	Number | Parenthesis | VariableCreation | Variable
+;
+
+Variable returns Expression:
+	{Var} id=ID
+;
+
+VariableCreation returns Expression:
+	{Let} 'let' id=ID '=' value=Exp 'in' body=Exp 'end'
+;
+
+Parenthesis returns Expression:
+	'(' Exp ')'
+;
+
+Number returns Expression:
+	{Num} value=INT
+;
+//LogicExp:
+//	Exp ('=' | '<' | '>' |'<=' | '>=') Exp
+//;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
