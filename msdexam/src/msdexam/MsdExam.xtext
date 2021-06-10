@@ -1,0 +1,9 @@
+grammar msdexam.MsdExam with org.eclipse.xtext.common.Terminals
+
+generate msdExam "http://www.MsdExam.msdexam"
+
+Model:
+	greetings+=Greeting*;
+	
+Greeting:
+	'Hello' name=ID '!';
