@@ -59,11 +59,11 @@ Function:
 	'function' name=ID function=Lambda
 ;
 
-Exp returns Expression:
-//	Exp '+' Exp | Exp '-' Exp | Exp '*' Exp | Exp '/' Exp
-//	| INT | '(' Exp ')' | 'let' ID '=' Exp 'in' Exp 'end'
-//	| ID ( '.' ID )* | 'none' | 'if' LogicExp 'then' Exp 'else' Exp 'end'
-//	| 'new' ID '[' ID '=' Exp (',' ID '=' Exp)* ']'
+Exp returns Expression://ObjectVariable | {Expression} None  | New | Logical
+	MainFactor | New | {Expression} None | Logical | ObjectVariable
+;
+
+MainFactor returns Expression:
 	Factor (('+' {Plus.left=current} | '-' {Minus.left=current}) right=Factor)*
 ;
 
@@ -72,7 +72,7 @@ Factor returns Expression:
 ;
 
 Primary returns Expression:
-	Number | Parenthesis | VariableCreation | Variable
+	Number | Parenthesis | VariableCreation | Variable 
 ;
 
 Variable returns Expression:
@@ -90,11 +90,36 @@ Parenthesis returns Expression:
 Number returns Expression:
 	{Num} value=INT
 ;
-//LogicExp:
-//	Exp ('=' | '<' | '>' |'<=' | '>=') Exp
-//;
+
+//ID Might not be correct here
+ObjectVariable returns Expression:
+	 id=ID '.' var=Variable
+;
 
 
+Logical returns Expression:
+	'if' LogicExp 'then' if=Exp 'else' else=Exp 'end'
+;
+
+New returns Expression:
+	'new' name=ID '[' variables+=NewObj (',' variables+=NewObj)* ']'
+;
+
+NewObj:
+	var=Variable '=' value=Exp
+;
+
+LogicExp returns Expression:
+	Factor ( '='  {Equals.left=current} 
+		   | '<'  {LessThan.left=current}
+		   | '>'  {GreaterThan.left=current}
+		   | '<=' {LessThanOrEquals.left=current} 
+		   | '>=' {GreaterThanOrEquals.left=current}) right=Factor
+;
+
+None:
+	'none'
+;
 
 
 
