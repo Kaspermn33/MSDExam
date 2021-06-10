@@ -44,7 +44,7 @@ Element://id=ID might not be correct
 ;
 
 Lambda:
-	'(' id=ID ':' type=Type ')' '{' exp=Exp '}'
+	'(' id=ID ':' type=Type ')' '{' exp+=Exp* '}'
 ;
 
 Node:
@@ -58,7 +58,7 @@ Input:
 Function:
 	'function' name=ID function=Lambda
 ;
-
+/* 
 Exp returns Expression://ObjectVariable | {Expression} None  | New | Logical
 	MainFactor | New | {Expression} None | Logical | ObjectVariable
 ;
@@ -75,20 +75,31 @@ Primary returns Expression:
 	Number | Parenthesis | VariableCreation | Variable 
 ;
 
-Variable returns Expression:
-	{Var} id=ID
-;
+
 
 VariableCreation returns Expression:
 	{Let} 'let' id=ID '=' value=Exp 'in' body=Exp 'end'
 ;
 
-Parenthesis returns Expression:
-	'(' Exp ')'
+
+
+*/
+Variable returns Expression:
+	{Var} id=ID
 ;
 
-Number returns Expression:
+Exp returns Expression:
+	{Expression} Plus | {Expression} Minus | {Expression} Mult | {Expression} Div | Num | Parenthesis | VariableCreation | Variable | {Expression} None | New | Logical | ObjectVariable
+;
+VariableCreation returns Expression:
+	{Let} 'let' id=ID '=' exps+=Exp* 'in' body+=Exp* 'end'
+;
+Num returns Expression:
 	{Num} value=INT
+;
+
+Parenthesis returns Expression:
+	{Expression} '(' exps+=Exp* ')'
 ;
 
 //ID Might not be correct here
@@ -96,6 +107,21 @@ ObjectVariable returns Expression:
 	 id=ID '.' var=Variable
 ;
 
+Plus:
+	'+'
+;
+
+Minus:
+	'-'
+;
+
+Mult:
+	'*'
+;
+
+Div:
+	'/'
+;
 
 Logical returns Expression:
 	'if' LogicExp 'then' if=Exp 'else' else=Exp 'end'
@@ -106,15 +132,17 @@ New returns Expression:
 ;
 
 NewObj:
-	var=Variable '=' value=Exp
+	var=Variable '=' exps+=Exp (exps+=Exp)*
 ;
 
 LogicExp returns Expression:
-	Factor ( '='  {Equals.left=current} 
-		   | '<'  {LessThan.left=current}
-		   | '>'  {GreaterThan.left=current}
-		   | '<=' {LessThanOrEquals.left=current} 
-		   | '>=' {GreaterThanOrEquals.left=current}) right=Factor
+  left=Exp 
+   ( logic='=' 
+   | logic='<'  
+   | logic='>'
+   | logic='<=' 
+   | logic='>=') 
+   right=Exp
 ;
 
 None:
