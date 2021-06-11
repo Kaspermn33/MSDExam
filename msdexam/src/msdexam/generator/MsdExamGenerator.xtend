@@ -26,6 +26,13 @@ import msdexam.msdExam.Exp
 import msdexam.msdExam.Lambda
 import msdexam.msdExam.Logical
 import java.util.HashMap
+import msdexam.msdExam.None
+import msdexam.msdExam.New
+import msdexam.msdExam.ObjectVariable
+import msdexam.msdExam.Let
+import org.eclipse.emf.common.util.EList
+import java.util.ArrayList
+
 
 /**
  * Generates code from your model files on save.
@@ -35,17 +42,12 @@ import java.util.HashMap
 class MsdExamGenerator extends AbstractGenerator {
 	var counter = 0
 	val HashMap<String, Integer> nameMap = new HashMap<String, Integer>();
+	val ArrayList<Integer> letList = new ArrayList<Integer>();
 
 
 	override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
 		val program = resource.allContents.filter(X21).next
 		fsa.generateFile(program.name.toFirstLower + "/" + program.name.toFirstUpper +"Main.java",generateFileContents(program))
-		
-//		fsa.generateFile('greetings.txt', 'People to greet: ' + 
-//			resource.allContents
-//				.filter(Greeting)
-//				.map[name]
-//				.join(', '))
 	}
 	
 	def CharSequence generateFileContents(X21 program) {
@@ -62,10 +64,9 @@ class MsdExamGenerator extends AbstractGenerator {
 			«generateNodes(program)»
 			«generateNodesForInternalLambdas(program)»
 			«generateOutputNodes(program)»
+			«generateHelperMethods(program)»
 			«initializeNodes(program)»
 			«initializeNetwork(program)»
-			
-			
 		}
 		'''
 	}
@@ -83,7 +84,6 @@ class MsdExamGenerator extends AbstractGenerator {
 	}
 	
 	def CharSequence generateFunctions(X21 program) {
-		//«resource.allContents.toIterable.filter(Function)»
 		'''
 		
 		«FOR f: program.declarations.filter(Function)»
@@ -93,7 +93,6 @@ class MsdExamGenerator extends AbstractGenerator {
 		
 		private Object funimpl_«f.name»(Integer _«f.function.id») { return («FOR exp: f.function.exps»«exp.getExpBody»«ENDFOR»); }
 		«ENDFOR»
-		
 		
 		'''
 	}
@@ -108,11 +107,18 @@ class MsdExamGenerator extends AbstractGenerator {
 			Num: "(" + exp.value.toString + ")"
 			Parenthesis: "(" + exp.generateParenthesis + ")"
 			Logical: "(" + exp.logical.left.getExpBody + exp.logical.logic + exp.logical.right.getExpBody + "?" + exp.then.getExpBody + ":" + exp.el.getExpBody + ")"
-			//VariableCreation:
-			//None: 
+			Let: "let"+getCounter(true)  + exp.exps.loopExps 
+			None: ""
+			New: ""
+			ObjectVariable:  ""
 			default: exp.toString
 		}
 	}
+	
+	def CharSequence loopExps(EList<Exp> list){
+		'''«FOR e:list»«e.getExpBody»«ENDFOR»'''
+	}
+
 	
 	def CharSequence generateParenthesis(Parenthesis p) {
 		'''«FOR e:p.exps»«e.getExpBody»«ENDFOR»'''
@@ -144,8 +150,6 @@ class MsdExamGenerator extends AbstractGenerator {
 	}
 	
 	def CharSequence generateOutputNodes(X21 program) {
-		//«FOR t:s.functions»«t.output»«ENDFOR»
-		//.get(1) is probably not the best solution
 		'''
 		«FOR s: program.declarations.filter(Stream)»
 			«FOR func: s.functions»
@@ -156,10 +160,6 @@ class MsdExamGenerator extends AbstractGenerator {
 		«ENDFOR»
 		
 		'''
-		//private OutputNode<Object> node_«s.functions.get(1).output» = new OutputNode<Object>();
-		//public List<Object> get«s.functions.get(1).output.toFirstUpper»() {return node_«s.functions.get(1).output».getData(); }
-		
-		
 	}
 	
 	def CharSequence initializeNodes(X21 program) {
@@ -179,21 +179,8 @@ class MsdExamGenerator extends AbstractGenerator {
 		}
 		
 		'''
-		
-		
-		/* «FOR s: program.declarations.filter(Stream)»
-				«FOR func: s.functions»
-				«IF func.function instanceof Lambda»super.addNode(node_«getCounter()»);
-				«ELSEIF func.name !== null»super.addNode(node_«getCounter()»);
-				«ENDIF»
-				«ENDFOR»
-			«ENDFOR»*/
-		
-		
 	}
-
-	
-	//USING .GET(0)     
+  
 	def CharSequence initializeNetwork(X21 program) {
 		'''
 		protected void initializeNetwork() {
@@ -216,38 +203,19 @@ class MsdExamGenerator extends AbstractGenerator {
 		}
 		
 		'''
-		//node_«s.inputs.get(0).name».addOutputNode(node_«s.functions.get(0).funcNode.name»);
-		//	node_«s.functions.get(0).funcNode.name».addOutputNode(node_«s.functions.get(1).output»);
-		
-		/*
-		  «FOR s: program.declarations.filter(Stream)»
-				«FOR input: s.inputs»
-					«FOR func: s.functions»
-					«IF func.output === null»
-					node_«input.name».addOutputNode(node_«func.getNodeName»);
-					«ELSEIF func.output !== null»
-						«FOR func2: s.functions»
-						«IF func !== func2»node_«func2.getNodeName».addOutputNode(node_«func.getNodeName»);«ENDIF»
-						«ENDFOR»
-					«ENDIF»
-					«ENDFOR»
-				«ENDFOR»
-			«ENDFOR»
-		 
-		 */
 	}
 	
 	def CharSequence generateNodesForInternalLambdas(X21 program){
 		'''
 		«FOR s: program.declarations.filter(Stream)»
 			«FOR func: s.functions»
-				«IF func.function instanceof Lambda»private ComputeNode <Object,Object> node_«getCounter()» = new AbstractComputeNode<Object,Object>() {«addToMap(func.function.toString, getIntCounter-1)»
+				«IF func.function instanceof Lambda»private ComputeNode <Object,Object> node_«getCounter(false)» = new AbstractComputeNode<Object,Object>() {«addToMap(func.function.toString, getIntCounter-1)»
 					protected Object function(Object input){
 						Function<Integer,Object> f = (Integer _«func.function.id») -> { return «FOR exp: func.function.exps»«exp.getExpBody»«ENDFOR»; };
 						return f.apply((Integer)input);
 					}
 				};
-				«ELSEIF func.name !== null»private ComputeNode <Object,Object> node_«getCounter()» = new AbstractComputeNode<Object,Object>() { «addToMap(func.name, getIntCounter-1)»
+				«ELSEIF func.name !== null»private ComputeNode <Object,Object> node_«getCounter(false)» = new AbstractComputeNode<Object,Object>() { «addToMap(func.name, getIntCounter-1)»
 					protected Object function(Object input){
 						return fun_«func.name»(input);
 					}
@@ -259,18 +227,40 @@ class MsdExamGenerator extends AbstractGenerator {
 		'''
 	}
 	
+	def CharSequence generateHelperMethods(X21 program){
+		'''
+		«FOR f: program.declarations.filter(Function)»
+		«FOR e: f.function.exps»
+		«IF e instanceof Let»
+		private static int let«letList.get(0)»(int _«e.id») {
+			return(«FOR b: e.body»«b.getExpBody»«ENDFOR»);
+		}
+		
+		«ENDIF»
+		«ENDFOR»
+		«ENDFOR»
+		'''
+	}
+	
 	def CharSequence getNodeName(Element e){//getCounter is not always correct
 		'''«IF e.funcNode !== null»«e.funcNode.name»«ELSEIF e.name !== null»«nameMap.get(e.name)»«ELSEIF e.function !== null»«nameMap.get(e.function.toString)»«ELSEIF e.output !== null»«e.output»«ENDIF»'''
 	}
 	
-	def CharSequence getCounter(){
+	def CharSequence getCounter(boolean isLet){
 		counter = counter+1
+		
+		if(isLet) {
+			addToLetList(counter)	
+		}
 		'''«counter-1»'''
+	}
+	
+	def addToLetList(Integer i) {
+		letList.add(i-1)
 	}
 	
 	def Integer getIntCounter(){
 		counter
-	
 	}
 	
 	def CharSequence getCounterNoInc(){
@@ -287,5 +277,4 @@ class MsdExamGenerator extends AbstractGenerator {
 	def void addToMap(String s, Integer i){
 		nameMap.put(s, i)
 	}
-	 
 }

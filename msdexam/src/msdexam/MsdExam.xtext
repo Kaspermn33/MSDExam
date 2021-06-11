@@ -77,7 +77,6 @@ Parenthesis:
 	 {Parenthesis} '(' exps+=Exp* ')'
 ;
 
-//ID Might not be correct here
 ObjectVariable:
 	 id=ID '.' var=Variable
 ;
