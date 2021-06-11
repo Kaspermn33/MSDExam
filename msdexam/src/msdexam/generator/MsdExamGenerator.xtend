@@ -52,7 +52,7 @@ class MsdExamGenerator extends AbstractGenerator {
 	
 	def CharSequence generateFileContents(X21 program) {
 		'''
-		package «program.name»;
+		package «program.name.toFirstLower»;
 		import libx21.*;
 		import java.util.function.Function;
 		import java.util.List;
@@ -140,7 +140,7 @@ class MsdExamGenerator extends AbstractGenerator {
 		'''
 		«FOR n: program.declarations.filter(Node)»
 		private ComputeNode<Object, Object> node_«n.name» = new AbstractComputeNode<Object, Object>(){
-			protected Objection function(Object input) {
+			protected Object function(Object input) {
 				return fun_«IF n.function !== null»«n.function.name»«ELSEIF n.lambda !== null»«n.lambda.id»«ENDIF»(input);
 			}
 		};
