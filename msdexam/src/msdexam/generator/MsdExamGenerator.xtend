@@ -9,9 +9,7 @@ import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
 import msdexam.msdExam.X21
 import msdexam.msdExam.Function
-import msdexam.msdExam.Expression
 import msdexam.msdExam.Plus
-import msdexam.msdExam.Var
 import msdexam.msdExam.Num
 import msdexam.msdExam.Input
 import msdexam.msdExam.Node
@@ -20,6 +18,14 @@ import msdexam.msdExam.InputNNode
 import msdexam.msdExam.Minus
 import msdexam.msdExam.Mult
 import msdexam.msdExam.Div
+import msdexam.msdExam.Parameter
+import msdexam.msdExam.Element
+import msdexam.msdExam.Variable
+import msdexam.msdExam.Parenthesis
+import msdexam.msdExam.Exp
+import msdexam.msdExam.Lambda
+import msdexam.msdExam.Logical
+import java.util.HashMap
 
 /**
  * Generates code from your model files on save.
@@ -27,6 +33,9 @@ import msdexam.msdExam.Div
  * See https://www.eclipse.org/Xtext/documentation/303_runtime_concepts.html#code-generation
  */
 class MsdExamGenerator extends AbstractGenerator {
+	var counter = 0
+	val HashMap<String, Integer> nameMap = new HashMap<String, Integer>();
+
 
 	override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
 		val program = resource.allContents.filter(X21).next
@@ -47,14 +56,29 @@ class MsdExamGenerator extends AbstractGenerator {
 		import java.util.List;
 		
 		public class «program.name.toFirstUpper»Main extends GenericMainX21 {
+			«generateParameters(program)»
 			«generateFunctions(program)»
 			«generateInputs(program)»
 			«generateNodes(program)»
+			«generateNodesForInternalLambdas(program)»
 			«generateOutputNodes(program)»
 			«initializeNodes(program)»
 			«initializeNetwork(program)»
 			
+			
 		}
+		'''
+	}
+	
+	def CharSequence generateParameters(X21 program) {
+		'''
+		«FOR p: program.declarations.filter(Parameter)»
+		private Integer _«p.name»;
+		public void setParameter«p.name.toFirstUpper»(Integer value){
+			_«p.name» = value;
+		}
+		«ENDFOR»
+		
 		'''
 	}
 	
@@ -67,23 +91,31 @@ class MsdExamGenerator extends AbstractGenerator {
 			return funimpl_«f.name»((Integer)arg);
 		}
 		
-		private Object funimpl_«f.name»(Integer _«f.function.id») { return («FOR exp: f.function.exp»«exp.getExpBody»«ENDFOR»); }
+		private Object funimpl_«f.name»(Integer _«f.function.id») { return («FOR exp: f.function.exps»«exp.getExpBody»«ENDFOR»); }
 		«ENDFOR»
 		
 		
 		'''
 	}
 	
-	def CharSequence getExpBody(Expression exp){
+	def CharSequence getExpBody(Exp exp){
 		switch exp {
 			Plus: "+"
 			Minus: "-"
 			Mult: "*"
 			Div: "/"
-			Var: "_"+exp.id
-			Num: exp.value.toString
-			default: throw new Error("Invalid expression")
+			Variable: "(_" + exp.id +")"
+			Num: "(" + exp.value.toString + ")"
+			Parenthesis: "(" + exp.generateParenthesis + ")"
+			Logical: "(" + exp.logical.left.getExpBody + exp.logical.logic + exp.logical.right.getExpBody + "?" + exp.then.getExpBody + ":" + exp.el.getExpBody + ")"
+			//VariableCreation:
+			//None: 
+			default: exp.toString
 		}
+	}
+	
+	def CharSequence generateParenthesis(Parenthesis p) {
+		'''«FOR e:p.exps»«e.getExpBody»«ENDFOR»'''
 	}
 	
 	def CharSequence generateInputs(X21 program) {
@@ -93,17 +125,17 @@ class MsdExamGenerator extends AbstractGenerator {
 		public void input«input.name.toFirstUpper»(Integer input){
 			node_«input.name».put(input);
 		}
+		
 		«ENDFOR»
 		'''
 	}
 	
 	def CharSequence generateNodes(X21 program) {
-		//CHECK IF LAMBDA INSTEAD OF FUNCTION
 		'''
 		«FOR n: program.declarations.filter(Node)»
 		private ComputeNode<Object, Object> node_«n.name» = new AbstractComputeNode<Object, Object>(){
 			protected Objection function(Object input) {
-				return fun_«n.function.name»(input);
+				return fun_«IF n.function !== null»«n.function.name»«ELSEIF n.lambda !== null»«n.lambda.id»«ENDIF»(input);
 			}
 		};
 		
@@ -116,36 +148,133 @@ class MsdExamGenerator extends AbstractGenerator {
 		//.get(1) is probably not the best solution
 		'''
 		«FOR s: program.declarations.filter(Stream)»
-		private OutputNode<Object> node_«s.functions.get(1).output» = new OutputNode<Object>();
-		public List<Object> get«s.functions.get(1).output.toFirstUpper»() {return node_«s.functions.get(1).output».getData(); }
-		
+			«FOR func: s.functions»
+				«IF func.output !== null»private OutputNode<Object> node_«func.output»  = new OutputNode<Object>();
+				public List<Object> get«func.output.toFirstUpper»() {return node_«func.output».getData(); }
+				«ENDIF»
+			«ENDFOR»
 		«ENDFOR»
+		
 		'''
+		//private OutputNode<Object> node_«s.functions.get(1).output» = new OutputNode<Object>();
+		//public List<Object> get«s.functions.get(1).output.toFirstUpper»() {return node_«s.functions.get(1).output».getData(); }
+		
+		
 	}
 	
 	def CharSequence initializeNodes(X21 program) {
+		counter = 0
 		'''
 		protected void initializeNodes() {
-			«FOR n:program.declarations.filter(Input)»
+			«FOR n:program.declarations.filter(InputNNode)»
 			super.addNode(node_«n.name»);
 			«ENDFOR»
-			«FOR n:program.declarations.filter(Node)»
-			super.addNode(node_«n.name»);
+			«FOR s:program.declarations.filter(Stream)»
+			«FOR func:s.functions»
+		«IF func.function instanceof Lambda»	super.addNode(node_«nameMap.get(func.function.toString)»); 
+		«ELSEIF func.name !== null»	super.addNode(node_«nameMap.get(func.name)»);
+			«ENDIF»                     
+			«ENDFOR»
 			«ENDFOR»
 		}
+		
 		'''
+		
+		
+		/* «FOR s: program.declarations.filter(Stream)»
+				«FOR func: s.functions»
+				«IF func.function instanceof Lambda»super.addNode(node_«getCounter()»);
+				«ELSEIF func.name !== null»super.addNode(node_«getCounter()»);
+				«ENDIF»
+				«ENDFOR»
+			«ENDFOR»*/
+		
+		
 	}
+
+	
 	//USING .GET(0)     
 	def CharSequence initializeNetwork(X21 program) {
 		'''
 		protected void initializeNetwork() {
 			«FOR s: program.declarations.filter(Stream)»
-			node_«s.inputs.get(0).name».addOutputNode(node_«s.functions.get(0).funcNode.name»);
-			node_«s.functions.get(0).funcNode.name».addOutputNode(node_«s.functions.get(1).output»);
-			
+				«FOR i: s.inputs»
+					«FOR f: s.functions»
+					«IF f.output===null»node_«i.name».addOutputNode(node_«f.getNodeName»);«ENDIF»
+					«ENDFOR»
+				«ENDFOR»
+				«FOR f: s.functions»
+				«IF f.output !== null»
+				«FOR f2: s.functions»
+				«IF f !== f2 && f2.output === null»
+				node_«f2.getNodeName».addOutputNode(node_«f.getNodeName»);
+				«ENDIF»
+				«ENDFOR»
+				«ENDIF»
+				«ENDFOR»	
 			«ENDFOR»
 		}
+		
 		'''
+		//node_«s.inputs.get(0).name».addOutputNode(node_«s.functions.get(0).funcNode.name»);
+		//	node_«s.functions.get(0).funcNode.name».addOutputNode(node_«s.functions.get(1).output»);
+		
+		/*
+		  «FOR s: program.declarations.filter(Stream)»
+				«FOR input: s.inputs»
+					«FOR func: s.functions»
+					«IF func.output === null»
+					node_«input.name».addOutputNode(node_«func.getNodeName»);
+					«ELSEIF func.output !== null»
+						«FOR func2: s.functions»
+						«IF func !== func2»node_«func2.getNodeName».addOutputNode(node_«func.getNodeName»);«ENDIF»
+						«ENDFOR»
+					«ENDIF»
+					«ENDFOR»
+				«ENDFOR»
+			«ENDFOR»
+		 
+		 */
+	}
+	
+	def CharSequence generateNodesForInternalLambdas(X21 program){
+		'''
+		«FOR s: program.declarations.filter(Stream)»
+			«FOR func: s.functions»
+				«IF func.function instanceof Lambda»private ComputeNode <Object,Object> node_«getCounter()» = new AbstractComputeNode<Object,Object>() {«addToMap(func.function.toString, getIntCounter-1)»
+					protected Object function(Object input){
+						Function<Integer,Object> f = (Integer _«func.function.id») -> { return «FOR exp: func.function.exps»«exp.getExpBody»«ENDFOR»; };
+						return f.apply((Integer)input);
+					}
+				};
+				«ELSEIF func.name !== null»private ComputeNode <Object,Object> node_«getCounter()» = new AbstractComputeNode<Object,Object>() { «addToMap(func.name, getIntCounter-1)»
+					protected Object function(Object input){
+						return fun_«func.name»(input);
+					}
+				};
+				«ENDIF»
+			«ENDFOR»
+		«ENDFOR»
+		
+		'''
+	}
+	
+	def CharSequence getNodeName(Element e){//getCounter is not always correct
+		'''«IF e.funcNode !== null»«e.funcNode.name»«ELSEIF e.name !== null»«nameMap.get(e.name)»«ELSEIF e.function !== null»«nameMap.get(e.function.toString)»«ELSEIF e.output !== null»«e.output»«ENDIF»'''
+	}
+	
+	def CharSequence getCounter(){
+		counter = counter+1
+		'''«counter-1»'''
+	}
+	
+	def Integer getIntCounter(){
+		counter
+	
+	}
+	
+	def CharSequence getCounterNoInc(){
+		'''«counter»'''
 	}
 	
 	def String name(InputNNode node){
@@ -155,4 +284,8 @@ class MsdExamGenerator extends AbstractGenerator {
 		}
 	}
 	
+	def void addToMap(String s, Integer i){
+		nameMap.put(s, i)
+	}
+	 
 }

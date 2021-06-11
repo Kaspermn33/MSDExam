@@ -44,7 +44,7 @@ Element://id=ID might not be correct
 ;
 
 Lambda:
-	'(' id=ID ':' type=Type ')' '{' exp+=Exp* '}'
+	'(' id=ID ':' type=Type ')' '{' exps+=Exp* '}'
 ;
 
 Node:
@@ -58,52 +58,27 @@ Input:
 Function:
 	'function' name=ID function=Lambda
 ;
-/* 
-Exp returns Expression://ObjectVariable | {Expression} None  | New | Logical
-	MainFactor | New | {Expression} None | Logical | ObjectVariable
+
+Variable:
+	id=ID
 ;
 
-MainFactor returns Expression:
-	Factor (('+' {Plus.left=current} | '-' {Minus.left=current}) right=Factor)*
+Exp:
+	 Plus |  Minus |  Mult |  Div | Num | Parenthesis | VariableCreation | Variable | None | New | Logical | ObjectVariable
 ;
-
-Factor returns Expression:
-	Primary (('*' {Mult.left=current} | '/' {Div.left=current}) right=Primary)*
-;
-
-Primary returns Expression:
-	Number | Parenthesis | VariableCreation | Variable 
-;
-
-
-
-VariableCreation returns Expression:
-	{Let} 'let' id=ID '=' value=Exp 'in' body=Exp 'end'
-;
-
-
-
-*/
-Variable returns Expression:
-	{Var} id=ID
-;
-
-Exp returns Expression:
-	 Plus |  Minus |  Mult |  Div | Num | Parenthesis | VariableCreation | Variable | {Expression} None | New | Logical | ObjectVariable
-;
-VariableCreation returns Expression:
+VariableCreation:
 	{Let} 'let' id=ID '=' exps+=Exp* 'in' body+=Exp* 'end'
 ;
-Num returns Expression:
+Num:
 	{Num} value=INT
 ;
 
-Parenthesis returns Expression:
-	{Expression} '(' exps+=Exp* ')'
+Parenthesis:
+	 {Parenthesis} '(' exps+=Exp* ')'
 ;
 
 //ID Might not be correct here
-ObjectVariable returns Expression:
+ObjectVariable:
 	 id=ID '.' var=Variable
 ;
 
@@ -123,11 +98,11 @@ Div:
 	{Div}'/'
 ;
 
-Logical returns Expression:
-	'if' LogicExp 'then' if=Exp 'else' else=Exp 'end'
+Logical:
+	'if' logical=LogicExp 'then' then=Exp 'else' el=Exp 'end'
 ;
 
-New returns Expression:
+New:
 	'new' name=ID '[' variables+=NewObj (',' variables+=NewObj)* ']'
 ;
 
@@ -135,7 +110,7 @@ NewObj:
 	var=Variable '=' exps+=Exp (exps+=Exp)*
 ;
 
-LogicExp returns Expression:
+LogicExp:
   left=Exp 
    ( logic='=' 
    | logic='<'  
@@ -146,7 +121,7 @@ LogicExp returns Expression:
 ;
 
 None:
-	'none'
+	{None} 'none'
 ;
 
 
